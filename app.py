@@ -1193,8 +1193,8 @@ play_queued(audio_holder)
 if err := st.session_state.pop("save_error", None):
     st.warning(f"Progress couldn't be saved: {err}")
 
-(tab_home, tab_phr, tab_verbs, tab_prep, tab_dict, tab_num, tab_gram, tab_prac, tab_prog) = st.tabs(
-    ["🏠 Today", "💬 Phrases", "🔁 Verb tables", "📍 Little words", "📖 Dictionary", "🔢 Numbers",
+(tab_home, tab_phr, tab_verbs, tab_allv, tab_prep, tab_dict, tab_num, tab_gram, tab_prac, tab_prog) = st.tabs(
+    ["🏠 Today", "💬 Phrases", "🔁 Verb tables", "📋 All verbs", "📍 Little words", "📖 Dictionary", "🔢 Numbers",
      "🧠 Grammar", "🎯 Practice", "📈 Progress"])
 
 
@@ -1317,6 +1317,87 @@ with tab_verbs:
     st.markdown('<div class="tip">🏙️ Any English verb works too: add <b>chEyyi</b> (do) — '
                 '“<b>call chestaanu</b>” (I\'ll call), “<b>book chesaanu</b>” (I booked). '
                 'Use the <b>do</b> table for every tense.</div>', unsafe_allow_html=True)
+
+
+# ================================== ALL VERBS (one big table) ==================================
+ALLV_CSS = """<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap');
+.allv-wrap { container-type: inline-size; width: 100%; }
+table.avt { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; background: #fff;
+  border-radius: 14px; overflow: hidden; box-shadow: 0 4px 14px rgba(30,30,80,.07);
+  font-family: 'Barlow Condensed', 'Avenir Next Condensed', 'Roboto Condensed', 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif;
+  font-stretch: condensed; }
+table.avt col.c-verb { width: 10%; } table.avt col.c-tense { width: 4.6%; } table.avt col.c-p { width: 10.675%; }
+table.avt th, table.avt td { padding: 4px 2px; text-align: center; vertical-align: middle; line-height: 1.12;
+  border-bottom: 1px solid #f1ead9; border-right: 1px solid #f1ead9; overflow-wrap: anywhere; word-break: normal;
+  font-size: clamp(8px, 1.5cqw, 14px); letter-spacing: -.01em; }
+table.avt thead th { position: sticky; top: 0; z-index: 2; }
+table.avt th.grp { color: #fff; font-weight: 700; font-size: clamp(9px, 1.7cqw, 15px); padding: 5px 2px; }
+table.avt th.g1 { background: #23245e; } table.avt th.g2 { background: #3a3f96; } table.avt th.g3 { background: #0f7f7a; }
+table.avt th.pp { background: #f7f2e6; color: #23245e; font-weight: 700; }
+table.avt th.pp span { display: block; font-weight: 500; color: #7a7890; font-size: .82em; }
+table.avt td.vb { text-align: left; padding-left: 5px; background: #fffaf0; font-weight: 700; color: #23245e;
+  border-right: 2px solid #e8dcc0; }
+table.avt td.vb span { display: block; font-weight: 500; color: #8a6d2f; font-size: .9em; margin-top: 2px; }
+table.avt td.tn { font-weight: 700; color: #6b6890; background: #fbf8f1; font-size: clamp(8px, 1.45cqw, 13px); }
+table.avt td.f { font-weight: 600; color: #1d1d3f; padding: 4px 1px; }
+table.avt td.f .w { white-space: nowrap; }
+table.avt td.f.s1 { font-size: clamp(7px, 1.32cqw, 13px); letter-spacing: -.015em; }
+table.avt td.f.s2 { font-size: clamp(7px, 1.07cqw, 12px); letter-spacing: -.02em; }
+table.avt td.f.s3 { font-size: clamp(6.5px, .98cqw, 11px); letter-spacing: -.025em; }
+table.avt td.f.s4 { font-size: clamp(6.5px, .86cqw, 10px); letter-spacing: -.03em; }
+@container (max-width: 560px) { table.avt td.f .w { white-space: normal; overflow-wrap: anywhere; } }
+table.avt td.f small { display: block; color: #a29fb3; font-weight: 500; font-size: .82em; margin-top: 1px; }
+table.avt tr.alt td.f { background: #fbfbff; }
+table.avt tr.first td { border-top: 2px solid #e8dcc0; }
+table.avt td.f.p1 { box-shadow: inset 3px 0 0 #23245e14; } table.avt td.f.p2 { box-shadow: inset 3px 0 0 #3a3f9614; }
+.allv-legend { color: #6b6890; font-size: .9rem; margin: 2px 0 8px; }
+</style>"""
+
+
+def all_verbs_html(verbs, show_full):
+    groups = [("1st person", 2, "g1"), ("2nd person", 2, "g2"), ("3rd person", 4, "g3")]
+    cols = '<colgroup><col class="c-verb"><col class="c-tense">' + '<col class="c-p">' * len(PERSONS) + "</colgroup>"
+    head = ('<thead><tr><th class="pp" rowspan="2">Verb</th><th class="pp" rowspan="2">Tense</th>'
+            + "".join(f'<th class="grp {c}" colspan="{n}">{g}</th>' for g, n, c in groups) + "</tr><tr>"
+            + "".join(f'<th class="pp">{htmlesc(show(p[1]))}<span>{htmlesc(p[2].replace(" (respectful / all of you)", " (resp.)").replace(" (respectful)", " (resp.)"))}</span></th>'
+                      for p in PERSONS) + "</tr></thead>")
+    body = []
+    for vi, v in enumerate(verbs):
+        alt = " alt" if vi % 2 else ""
+        for ti, (tkey, tshort) in enumerate((("present", "Pres."), ("past", "Past"), ("future", "Fut."))):
+            cells = ""
+            for pi, p in enumerate(PERSONS):
+                full, spoken = conj(v, tkey, p[0])
+                sub = f"<small>{htmlesc(show(full))}</small>" if show_full and full != spoken else ""
+                grp = "p1" if pi < 2 else ("p2" if pi < 4 else "p3")
+                words = show(spoken).split()
+                n = max(len(x) + 0.7 * sum(x.count(c) for c in "mw") for x in words)   # m and w are wide letters
+                size = "" if n <= 10 else ("s1" if n <= 13 else ("s2" if n <= 16 else ("s3" if n <= 18 else "s4")))
+                txt = " ".join(f'<span class="w">{htmlesc(x)}</span>' for x in words)
+                cells += f'<td class="f {grp} {size}">{txt}{sub}</td>'
+            verb_cell = (f'<td class="vb" rowspan="3">to {htmlesc(v["en"])}<span>{htmlesc(show(dict_form(v)))}</span></td>'
+                         if ti == 0 else "")
+            body.append(f'<tr class="{"first" if ti == 0 else ""}{alt}">{verb_cell}<td class="tn">{tshort}</td>{cells}</tr>')
+    return f'<div class="allv-wrap"><table class="avt">{cols}{head}<tbody>{"".join(body)}</tbody></table></div>'
+
+
+with tab_allv:
+    st.markdown(f"### 📋 All {len(VERBS)} verbs — full tables")
+    st.markdown('<div class="allv-legend">Present · Past · Future for every person — no need to pick a verb. '
+                'Bold = everyday Hyderabad Telugu. Use <b>🔁 Verb tables</b> to hear a verb and see its examples.</div>',
+                unsafe_allow_html=True)
+    fc1, fc2 = st.columns([3, 2], vertical_alignment="bottom")
+    av_q = fc1.text_input("🔎 Find a verb", key="allv_q", placeholder="e.g. eat, come, tinu…").strip().lower()
+    av_full = fc2.toggle("Show textbook forms too", value=False, key="allv_full")
+    av_list = sorted(VERBS, key=lambda x: x["en"].lower())
+    if av_q:
+        av_list = [x for x in av_list if av_q in x["en"].lower() or av_q in show(dict_form(x)).lower()]
+    if not av_list:
+        st.info("No verb matches that search.")
+    else:
+        st.caption(f"Showing {len(av_list)} of {len(VERBS)} verbs · A–Z by English")
+        st.markdown(ALLV_CSS + all_verbs_html(av_list, av_full), unsafe_allow_html=True)
 
 
 # ==================================== LITTLE WORDS ====================================
