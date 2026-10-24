@@ -1387,16 +1387,29 @@ with tab_allv:
     st.markdown('<div class="allv-legend">Present · Past · Future for every person — no need to pick a verb. '
                 'Bold = everyday Hyderabad Telugu. Use <b>🔁 Verb tables</b> to hear a verb and see its examples.</div>',
                 unsafe_allow_html=True)
-    fc1, fc2 = st.columns([3, 2], vertical_alignment="bottom")
-    av_q = fc1.text_input("🔎 Find a verb", key="allv_q", placeholder="e.g. eat, come, tinu…").strip().lower()
+    av_all = sorted(VERBS, key=lambda x: x["en"].lower())
+    av_picks = st.multiselect(
+        "✅ Choose up to 10 verbs to see together (leave empty to see all)", [x["en"] for x in av_all],
+        key="allv_pick", max_selections=10, placeholder="Type to find a verb, e.g. eat, come, go…",
+        format_func=lambda e: f"to {e}  —  {show(dict_form(VERB_BY_EN[e]))}")
+    fc1, fc2, fc3 = st.columns([3, 2, 1.3], vertical_alignment="bottom")
+    av_q = fc1.text_input("🔎 Or filter the full list", key="allv_q", placeholder="e.g. eat, come, tinu…",
+                          disabled=bool(av_picks)).strip().lower()
     av_full = fc2.toggle("Show textbook forms too", value=False, key="allv_full")
-    av_list = sorted(VERBS, key=lambda x: x["en"].lower())
-    if av_q:
-        av_list = [x for x in av_list if av_q in x["en"].lower() or av_q in show(dict_form(x)).lower()]
+    if av_picks:
+        fc3.button("✖ Clear", key="allv_clear", use_container_width=True,
+                   on_click=lambda: st.session_state.update(allv_pick=[]))
+        av_list = [VERB_BY_EN[e] for e in av_picks]
+        note = f"Showing your {len(av_list)} chosen verb{'s' if len(av_list) > 1 else ''} (in the order you picked them)"
+    else:
+        av_list = av_all
+        if av_q:
+            av_list = [x for x in av_list if av_q in x["en"].lower() or av_q in show(dict_form(x)).lower()]
+        note = f"Showing {len(av_list)} of {len(VERBS)} verbs · A–Z by English"
     if not av_list:
         st.info("No verb matches that search.")
     else:
-        st.caption(f"Showing {len(av_list)} of {len(VERBS)} verbs · A–Z by English")
+        st.caption(note)
         st.markdown(ALLV_CSS + all_verbs_html(av_list, av_full), unsafe_allow_html=True)
 
 
