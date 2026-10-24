@@ -544,6 +544,99 @@ VERBS = [
      "ex": [("nEnu prayatnistaanu", "I'll try."), ("mallee prayatninchu", "Try again.")]},
 ]
 
+
+# ------------------- one easy question + answer for every verb -------------------
+# verb (English key) : (question, question in English, answer, answer in English)
+VERB_QA = {
+    "ask": ("nuvvu evarini aDigaav?", "Who did you ask?", "nEnu _teacher ni aDiga.", "I asked the teacher."),
+    "bathe / shower": ("snaanam chEsaavaa?", "Did you have a bath?", "avunu, nEnu snaanam chEsa.", "Yes, I had a bath."),
+    "bring": ("Em tecchaav?", "What did you bring?", "nEnu _sweets teccha.", "I brought sweets."),
+    "buy": ("Em konnaav?", "What did you buy?", "nEnu kotta _phone konna.", "I bought a new phone."),
+    "call (someone)": ("evarini pilustunnaav?", "Who are you calling?", "nEnu amma ni pilustunna.", "I'm calling Mum."),
+    "close / shut": ("talupu moosaavaa?", "Did you close the door?", "avunu, nEnu talupu moosa.", "Yes, I closed the door."),
+    "come": ("eppuDu vastaav?", "When will you come?", "nEnu rEpu vasta.", "I'll come tomorrow."),
+    "cook": ("eeroju Em vanTa chEstunnaav?", "What are you cooking today?", "nEnu pappu vanTa chEstunna.",
+             "I'm cooking dal."),
+    "cry": ("baabu EDustunnaaDaa?", "Is the baby boy crying?", "avunu, baabu EDustunnaaDu.", "Yes, the baby is crying."),
+    "do": ("Em chEstunnaav?", "What are you doing?", "nEnu _homework chEstunna.", "I'm doing my homework."),
+    "drink": ("Em taagutaav — chai aa, _coffee aa?", "What will you drink — tea or coffee?", "nEnu chai taaguta.",
+              "I'll drink tea."),
+    "drive / ride": ("nuvvu _car naDuputaavaa?", "Do you drive a car?", "avunu, nEnu _car naDuputa.", "Yes, I drive a car."),
+    "eat": ("_tiffin tinnaavaa?", "Did you eat breakfast?", "avunu, nEnu dOsa tinna.", "Yes, I ate dosa."),
+    "fall asleep": ("pillalu nidrapOyaaraa?", "Have the children fallen asleep?", "avunu, pillalu nidrapOyaaru.",
+                    "Yes, the children have fallen asleep."),
+    "forget": ("Em marchipOyaav?", "What did you forget?", "nEnu naa _phone marchipOya.", "I forgot my phone."),
+    "get off / get down": ("ekkaDa digutaav?", "Where will you get off?", "nEnu _metro _station daggara diguta.",
+                           "I'll get off near the metro station."),
+    "get on / climb": ("E _bus ekkaav?", "Which bus did you get on?", "nEnu _Ameerpet _bus ekka.",
+                       "I got on the Ameerpet bus."),
+    "get up / wake up": ("rOjuu eppuDu lEstaav?", "When do you get up every day?", "nEnu aaru gaNTalaki lEsta.",
+                         "I get up at 6 o'clock."),
+    "give": ("naaku Em istaav?", "What will you give me?", "nEnu neeku oka pustakam ista.", "I'll give you a book."),
+    "go": ("ekkaDiki veLtunnaav?", "Where are you going?", "nEnu _office ki veLtunna.", "I'm going to the office."),
+    "go (Hyderabad everyday word)": ("ekkaDiki pOtunnaav?", "Where are you going?", "nEnu intiki pOtunna.",
+                                     "I'm going home."),
+    "help": ("naaku konchem sahaayam chEstaavaa?", "Will you help me a little?", "avunu, tappakunDaa sahaayam chEsta.",
+             "Yes, I'll definitely help."),
+    "know / find out": ("daari telusukunnaavaa?", "Did you find out the way?", "avunu, nEnu daari telusukunna.",
+                        "Yes, I found out the way."),
+    "laugh": ("enduku navvutunnaav?", "Why are you laughing?", "oka _joke vinna, anduke navvutunna.",
+              "I heard a joke, that's why I'm laughing."),
+    "learn": ("Em nErchukunTunnaav?", "What are you learning?", "nEnu _Telugu nErchukunTunna.", "I'm learning Telugu."),
+    "listen / hear": ("E paaTalu vinTaav?", "What songs do you listen to?", "nEnu _Telugu paaTalu vinTa.",
+                      "I listen to Telugu songs."),
+    "meet": ("ninna evarini kalisaav?", "Who did you meet yesterday?", "nEnu naa _friend ni kalisa.",
+             "I met my friend."),
+    "open": ("_shop eppuDu terustaaru?", "When do they open the shop?", "_shop padi gaNTalaki terustaaru.",
+             "They open the shop at 10 o'clock."),
+    "pay (a bill) / tie / build": ("_bill kaTTaavaa?", "Did you pay the bill?", "avunu, nEnu _bill kaTTa.",
+                                   "Yes, I paid the bill."),
+    "phone / ring someone": ("naaku eppuDu _phone chEstaav?", "When will you call me?", "nEnu saayantram _phone chEsta.",
+                             "I'll call you in the evening."),
+    "play": ("Em aaTa aaDutaav?", "What game do you play?", "nEnu _cricket aaDuta.", "I play cricket."),
+    "put / keep": ("_keys ekkaDa peTTaav?", "Where did you put the keys?", "nEnu _keys _table meeda peTTa.",
+                   "I put the keys on the table."),
+    "read / study": ("Em chaduvutunnaav?", "What are you studying?", "nEnu _engineering chaduvutunna.",
+                     "I'm studying engineering."),
+    "remember": ("naa pEru gurtupeTTukunnaavaa?", "Did you remember my name?", "avunu, nEnu mee pEru gurtupeTTukunna.",
+                 "Yes, I remembered your name."),
+    "run": ("nuvvu rOjuu parigettutaavaa?", "Do you run every day?", "avunu, nEnu rOjuu parigettuta.",
+            "Yes, I run every day."),
+    "say / tell": ("vaaDiki cheppaavaa?", "Did you tell him?", "avunu, nEnu vaaDiki cheppa.", "Yes, I told him."),
+    "search / look for": ("Em vetukutunnaav?", "What are you looking for?", "nEnu naa _keys vetukutunna.",
+                          "I'm looking for my keys."),
+    "see / watch": ("ninna E _movie chuusaav?", "Which movie did you watch yesterday?", "nEnu oka _Telugu _movie chuusa.",
+                    "I watched a Telugu movie."),
+    "sell": ("vaaDu Em ammutaaDu?", "What does he sell?", "vaaDu panDlu ammutaaDu.", "He sells fruit."),
+    "send": ("_photo pampaavaa?", "Did you send the photo?", "avunu, nEnu _photo pampa.", "Yes, I sent the photo."),
+    "show": ("naaku daari chuupistaavaa?", "Will you show me the way?", "avunu, nEnu daari chuupista.",
+             "Yes, I'll show you the way."),
+    "sing": ("nuvvu paaDutaavaa?", "Do you sing?", "avunu, nEnu konchem paaDuta.", "Yes, I sing a little."),
+    "sit": ("ekkaDa kuurchunTaav?", "Where will you sit?", "nEnu ikkaDa kuurchunTa.", "I'll sit here."),
+    "sleep (go to bed)": ("rOjuu eppuDu paDukunTaav?", "When do you go to bed every day?", "nEnu padi gaNTalaki paDukunTa.",
+                          "I go to bed at 10 o'clock."),
+    "speak / talk": ("nuvvu _Telugu maaTlaaDutaavaa?", "Do you speak Telugu?", "avunu, nEnu konchem _Telugu maaTlaaDuta.",
+                     "Yes, I speak a little Telugu."),
+    "stand": ("ekkaDa nilabaDDaav?", "Where did you stand?", "nEnu _queue lO nilabaDDa.", "I stood in the queue."),
+    "take": ("_office ki Em teesukunnaav — _auto aa, _bus aa?", "What did you take to the office — an auto or a bus?",
+             "nEnu _auto teesukunna.", "I took an auto."),
+    "teach": ("neeku vanTa evaru nErpaaru?", "Who taught you cooking?", "maa amma naaku vanTa nErpindi.",
+              "My mum taught me cooking."),
+    "think": ("Em aalOchistunnaav?", "What are you thinking about?", "nEnu rEpu _exam gurinchi aalOchistunna.",
+              "I'm thinking about tomorrow's exam."),
+    "think / feel / suppose": ("vaaDu vastaaDani anukunTunnaavaa?", "Do you think he'll come?",
+                               "avunu, vaaDu vastaaDani anukunTunna.", "Yes, I think he'll come."),
+    "try": ("mallee prayatnistaavaa?", "Will you try again?", "avunu, nEnu mallee prayatnista.", "Yes, I'll try again."),
+    "understand": ("artham chEsukunnaavaa?", "Did you understand?", "avunu, nEnu artham chEsukunna.", "Yes, I understood."),
+    "use": ("nuvvu _UPI vaaDutaavaa?", "Do you use UPI?", "avunu, nEnu rOjuu _UPI vaaDuta.", "Yes, I use UPI every day."),
+    "wait / stop": ("_bus ikkaDa aagutundaa?", "Does the bus stop here?", "avunu, _bus ikkaDa aagutundi.",
+                    "Yes, the bus stops here."),
+    "walk": ("nuvvu rOjuu naDustaavaa?", "Do you walk every day?", "avunu, nEnu rOjuu naDusta.", "Yes, I walk every day."),
+    "wash": ("chEtulu kaDigaavaa?", "Did you wash your hands?", "avunu, nEnu chEtulu kaDiga.", "Yes, I washed my hands."),
+    "work": ("nuvvu ekkaDa pani chEstaav?", "Where do you work?", "nEnu _office lO pani chEsta.", "I work in an office."),
+    "write": ("Em raastunnaav?", "What are you writing?", "nEnu _letter raastunna.", "I'm writing a letter."),
+}
+
 # ================================== WORDS ==================================
 # Each topic: list of (English, Telugu, note)
 WORDS = {
@@ -1352,20 +1445,32 @@ table.avt tr.alt td.f { background: #fbfbff; }
 table.avt tr.first td { border-top: 2px solid #e8dcc0; }
 table.avt td.f.p1 { box-shadow: inset 3px 0 0 #23245e14; } table.avt td.f.p2 { box-shadow: inset 3px 0 0 #3a3f9614; }
 .allv-legend { color: #6b6890; font-size: .9rem; margin: 2px 0 8px; }
+table.avx col.c-verb { width: 12%; } table.avx col.c-x { width: 11%; }
+table.avn col.c-verb { width: 10%; } table.avn col.c-tense { width: 7%; } table.avn col.c-p { width: 10.375%; }
+table.avx td.f { font-size: clamp(8px, 1.3cqw, 13.5px); }
+table.avx td.f .w { white-space: nowrap; }
+.card.qa .qa-verb { font-size: .8rem; font-weight: 700; color: #8a6d2f; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.card.qa .qa-q, .card.qa .qa-a { margin: 4px 0; }
+.card.qa .qa-q .te { font-weight: 700; } .card.qa .qa-a .te { color: #0f7f7a; font-weight: 700; }
+.card.qa .en { margin-left: 26px; }
 </style>"""
 
 
-def all_verbs_html(verbs, show_full):
+ALLV_MAIN = (("present", "Pres."), ("past", "Past"), ("future", "Fut."))
+ALLV_NEG = (("negative", "won't"), ("didnt", "didn't"))
+
+
+def all_verbs_html(verbs, show_full, tenses=ALLV_MAIN, extra_class=""):
     groups = [("1st person", 2, "g1"), ("2nd person", 2, "g2"), ("3rd person", 4, "g3")]
     cols = '<colgroup><col class="c-verb"><col class="c-tense">' + '<col class="c-p">' * len(PERSONS) + "</colgroup>"
-    head = ('<thead><tr><th class="pp" rowspan="2">Verb</th><th class="pp" rowspan="2">Tense</th>'
+    head = ('<thead><tr><th class="pp" rowspan="2">Verb</th><th class="pp" rowspan="2"></th>'
             + "".join(f'<th class="grp {c}" colspan="{n}">{g}</th>' for g, n, c in groups) + "</tr><tr>"
             + "".join(f'<th class="pp">{htmlesc(show(p[1]))}<span>{htmlesc(p[2].replace(" (respectful / all of you)", " (resp.)").replace(" (respectful)", " (resp.)"))}</span></th>'
                       for p in PERSONS) + "</tr></thead>")
     body = []
     for vi, v in enumerate(verbs):
         alt = " alt" if vi % 2 else ""
-        for ti, (tkey, tshort) in enumerate((("present", "Pres."), ("past", "Past"), ("future", "Fut."))):
+        for ti, (tkey, tshort) in enumerate(tenses):
             cells = ""
             for pi, p in enumerate(PERSONS):
                 full, spoken = conj(v, tkey, p[0])
@@ -1376,10 +1481,10 @@ def all_verbs_html(verbs, show_full):
                 size = "" if n <= 10 else ("s1" if n <= 13 else ("s2" if n <= 16 else ("s3" if n <= 18 else "s4")))
                 txt = " ".join(f'<span class="w">{htmlesc(x)}</span>' for x in words)
                 cells += f'<td class="f {grp} {size}">{txt}{sub}</td>'
-            verb_cell = (f'<td class="vb" rowspan="3">to {htmlesc(v["en"])}<span>{htmlesc(show(dict_form(v)))}</span></td>'
+            verb_cell = (f'<td class="vb" rowspan="{len(tenses)}">to {htmlesc(v["en"])}<span>{htmlesc(show(dict_form(v)))}</span></td>'
                          if ti == 0 else "")
             body.append(f'<tr class="{"first" if ti == 0 else ""}{alt}">{verb_cell}<td class="tn">{tshort}</td>{cells}</tr>')
-    return f'<div class="allv-wrap"><table class="avt">{cols}{head}<tbody>{"".join(body)}</tbody></table></div>'
+    return f'<div class="allv-wrap"><table class="avt {extra_class}">{cols}{head}<tbody>{"".join(body)}</tbody></table></div>'
 
 
 with tab_allv:
@@ -1411,6 +1516,61 @@ with tab_allv:
     else:
         st.caption(note)
         st.markdown(ALLV_CSS + all_verbs_html(av_list, av_full), unsafe_allow_html=True)
+        if av_picks:
+            # ---- 1. a question and its answer for each chosen verb ----
+            st.markdown("#### ❓ Questions & answers")
+            st.caption("Read the question, try to answer it yourself out loud, then check the answer. "
+                       "🔊 says the question and the answer.")
+            for i, v in enumerate(av_list):
+                qa = VERB_QA.get(v["en"])
+                if not qa:
+                    continue
+                q_te, q_en, a_te, a_en = qa
+                c1, c2 = st.columns([5, 2])
+                c1.markdown(f'<div class="card qa"><div class="qa-verb">to {htmlesc(v["en"])} · '
+                            f'{htmlesc(show(dict_form(v)))}</div>'
+                            f'<div class="qa-q">❓ <span class="te">{htmlesc(show_cap(q_te))}</span>'
+                            f'<div class="en">{htmlesc(q_en)}</div></div>'
+                            f'<div class="qa-a">💬 <span class="te">{htmlesc(show_cap(a_te))}</span>'
+                            f'<div class="en">{htmlesc(a_en)}</div></div></div>', unsafe_allow_html=True)
+                with c2:
+                    st.write("")
+                    say_btns(f"{q_te} . {a_te}", f"allv_qa_{i}")
+
+            # ---- 2. negatives ----
+            st.markdown("#### ➖ Negatives: won't / don't · didn't")
+            st.caption("“Won't / don't” is used for the future and for habits. “Didn't” is the same word for everyone.")
+            st.markdown(all_verbs_html(av_list, False, ALLV_NEG, "avn"), unsafe_allow_html=True)
+
+            # ---- 3. requests, must, can ----
+            st.markdown("#### ✨ Requests, must and can")
+            heads = ["Please … (polite)", "Do it! (casual)", "Please don't …", "Don't … (casual)", "I must …",
+                     "I can …", "I can't …", "Let's …"]
+            keys = ["Polite request (please …)", "Casual command (to a friend)", "Please don't …", "Don't … (casual)",
+                    "I must …", "I can …", "I can't …", "Let's …"]
+
+            def _xcells(v):
+                forms = dict(extra_forms(v))
+                out = ""
+                for k in keys:
+                    if k not in forms:
+                        out += '<td class="f">—</td>'
+                        continue
+                    words = show(forms[k]).split()
+                    n = max(len(x) + 0.7 * sum(x.count(c) for c in "mw") for x in words)
+                    size = "" if n <= 9 else ("s1" if n <= 12 else ("s2" if n <= 15 else "s3"))
+                    out += (f'<td class="f {size}">' + " ".join(f'<span class="w">{htmlesc(x)}</span>' for x in words)
+                            + "</td>")
+                return out
+            rows = "".join(
+                f'<tr class="first{" alt" if vi % 2 else ""}"><td class="vb">to {htmlesc(v["en"])}'
+                f'<span>{htmlesc(show(dict_form(v)))}</span></td>{_xcells(v)}</tr>' for vi, v in enumerate(av_list))
+            st.markdown('<div class="allv-wrap"><table class="avt avx"><colgroup><col class="c-verb">'
+                        + '<col class="c-x">' * len(heads) + '</colgroup><thead><tr><th class="pp">Verb</th>'
+                        + "".join(f'<th class="pp">{h}</th>' for h in heads) + f'</tr></thead><tbody>{rows}</tbody></table></div>',
+                        unsafe_allow_html=True)
+            st.caption("Polite forms (…anDi) are for elders, strangers and anyone you call 'meeru'. "
+                       "Casual forms are for friends and younger people.")
 
 
 # ==================================== LITTLE WORDS ====================================
