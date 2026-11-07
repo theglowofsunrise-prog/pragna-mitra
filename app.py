@@ -2011,6 +2011,7 @@ with tab_dict:
 # ===================================== TRANSLATE =====================================
 TR_MAX = 4500          # characters per translation (the free online translator's limit is ~5000)
 _TE_DIGITS = str.maketrans("౦౧౨౩౪౫౬౭౮౯", "0123456789")
+AI_MODEL = "claude-haiku-5-5"   # used only if ANTHROPIC_API_KEY is set in Streamlit Secrets
 
 
 def _split_chunks(text, limit):
@@ -2046,25 +2047,211 @@ def translate_paragraph(text: str):
     raise ConnectionError("translator not reachable")
 
 
-def readable_roman(te_text: str) -> str:
-    """Telugu script -> easy English letters, with capitals at the start of each sentence."""
-    clean = re.sub("[\u200b-\u200d\ufeff]", "", te_text.translate(_TE_DIGITS))
-    s = show(roman_from_telugu(clean))
-    s = s.replace("।", ".").replace("॥", ".")
-    return re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), s)
+def roman_of_script(te_text: str) -> str:
+    """Telugu script -> this app's internal English-letter spelling (keeps T/D/N/L/E/O marks)."""
+    clean = re.sub("[​-‍﻿]", "", te_text.translate(_TE_DIGITS))
+    return roman_from_telugu(clean).replace("।", ".").replace("॥", ".")
+
+
+# ---------- Casual Hyderabad version, built by rules (free, works without any key) ----------
+# Written / formal endings -> how they are said in Hyderabad (same patterns as the verb tables)
+_CASUAL_ENDINGS = [
+    ("unnaanu", "unna"), ("unnaamu", "unnam"), ("unnaavu", "unnav"),
+    ("unnadi", "ondi"), ("unnaayi", "unnay"),
+    ("aanu", "a"), ("aamu", "am"), ("aavu", "av"), ("aayi", "ay"),
+    ("aaDu", "aaDu"), ("indi", "indi"),
+]
+# Formal / bookish words -> what people actually say (an English word starts with _)
+_CASUAL_WORDS = {
+    "nunDi": "nunchi", "nundi": "nunchi", "mariyu": "inka", "kooDaa": "kooDa", "eerOju": "ivaaLa",
+    "nEDu": "ivaaLa", "neeru": "neeLLu", "bhOjanam": "annam", "aahaaram": "tinDi", "vaaru": "vaaLLu",
+    "dayachEsi": "_please", "dhanyavaadaalu": "_thanks", "kshaminchanDi": "_sorry", "samayam": "_time",
+    "kaaryaalayam": "_office", "aasupatri": "_hospital", "vaidyuDu": "_doctor", "vaidyuralu": "_doctor",
+    "paaThashaala": "_school", "vidyaalayam": "_school", "kaLaashaala": "_college", "pustakam": "_book",
+    "sahaayam": "_help", "samasya": "_problem", "udyOgam": "_job", "vaaram": "_week", "prayaaNam": "_travel",
+    "vimaanaashrayam": "_airport", "vimaanam": "_flight", "kaaphee": "_coffee", "dooravaaNi": "_phone",
+    "phOn": "_phone", "nagaram": "_city", "railu": "_train", "bassu": "_bus", "kaaru": "_car",
+    "samaavEsham": "_meeting", "pareeksha": "_exam", "jeetam": "_salary", "dukaaNam": "_shop",
+    "maarkeT": "_market", "TikkeT": "_ticket", "hOTal": "_hotel", "kampyooTar": "_computer",
+    "sandEsham": "_message", "vishayam": "_matter", "avakaasham": "_chance", "kuTumbam": "_family",
+    "snEhituDu": "_friend", "snEhitulu": "_friends", "snEhituraalu": "_friend", "upaadhyaayuDu": "_teacher",
+    "praarambham": "_start", "aalasyam": "_late", "tvaragaa": "_fast-gaa", "sulabhaMgaa": "_easy-gaa",
+    "kashTaMgaa": "kashTaMgaa",
+}
+# Case endings that stick to a noun: kaaryaalayaaniki -> office ki
+_NOUN_SUFFIX = [("aaniki", "ki"), ("aanni", "ni"), ("amlO", "lO"), ("anlO", "lO"), ("aMlO", "lO"), ("amtO", "tO"),
+                ("antO", "tO"), ("aMtO", "tO"), ("aanikee", "ki"), ("aannee", "ni"), ("am nunchi", "nunchi")]
+
+
+def _casual_word(w: str) -> str:
+    core = re.match(r"^([^\w]*)(.*?)([^\w]*)$", w)
+    lead, word, trail = core.groups()
+    if not word:
+        return w
+    if word in _CASUAL_WORDS:
+        return lead + _CASUAL_WORDS[word] + trail
+    for formal, casual in _CASUAL_WORDS.items():
+        if formal.endswith("am"):
+            base = formal[:-2]
+            for suf, rep in _NOUN_SUFFIX:
+                if word == base + suf:
+                    return f"{lead}{casual} {rep}{trail}"
+        if len(formal) > 3 and word.startswith(formal) and len(word) - len(formal) <= 4:
+            rest = word[len(formal):]
+            return f"{lead}{casual} {rest}{trail}" if casual.startswith("_") else f"{lead}{casual}{rest}{trail}"
+    if len(word) > 4:
+        for formal_end, casual_end in _CASUAL_ENDINGS:
+            if word.endswith(formal_end):
+                word = word[: -len(formal_end)] + casual_end
+                break
+    return lead + word + trail
+
+
+def casual_by_rules(formal_roman: str) -> str:
+    s = re.sub(r"\bee\s+rOju\b", "ivaaLa", formal_roman)
+    return " ".join(_casual_word(w) for w in s.split())
+
+
+# ---------- Casual Hyderabad version, written by Claude (optional, much more natural) ----------
+AI_PROMPT = """You turn English into the Telugu people really SPEAK in Hyderabad (Telangana): relaxed, everyday,
+mixing in English words the way Hyderabadis do (office, bus, phone, time, please, sorry, actually, problem, etc.).
+Never bookish. Drop formal endings: use 'vastunna' not 'vastunnaanu', 'chestondi' not 'chestunnadi', 'nunchi' not 'nundi'.
+
+Write it in ENGLISH LETTERS with exactly this spelling, because a computer reads it aloud:
+- long vowels: aa ee oo · long e = E · long o = O · short: a i u e o
+- tongue-curled sounds: T D N L (capital) · soft sounds: t d n l · ch, sh, S (=ష)
+- anusvara before a consonant: M (e.g. tinTunna can also be tiMTunna — prefer plain 'n'/'m' when natural)
+- put _ before every English word so it is spoken as English: _office, _bus, _please
+- all other letters lowercase. Keep sentence punctuation (. , ? !).
+
+For each English paragraph you also get the formal (written) Telugu version in the same spelling.
+Return ONLY JSON, nothing else:
+{"items": [{"casual": "<casual Hyderabad version of paragraph 1>",
+            "words": {"<each Telugu word in casual AND formal, exactly as written, no punctuation>": "<short English meaning>"}}, ...]}
+One item per paragraph, same order. Skip the English (_) words in "words"."""
+
+
+def ai_key():
+    return secret("ANTHROPIC_API_KEY")
+
+
+@st.cache_data(show_spinner=False, max_entries=300, ttl=60 * 60 * 24 * 7)
+def casual_by_ai(pairs: tuple):
+    """pairs = ((english, formal_roman), ...) -> list of (casual_roman, {word: meaning})."""
+    body = "\n\n".join(f"Paragraph {i + 1}\nEnglish: {en}\nFormal Telugu: {fr}" for i, (en, fr) in enumerate(pairs))
+    r = requests.post("https://api.anthropic.com/v1/messages", timeout=60, headers={
+        "x-api-key": ai_key(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
+        json={"model": AI_MODEL, "max_tokens": 4000, "system": AI_PROMPT,
+              "messages": [{"role": "user", "content": body}]})
+    r.raise_for_status()
+    text = "".join(b.get("text", "") for b in r.json().get("content", []))
+    items = json.loads(text[text.find("{"): text.rfind("}") + 1])["items"]
+    if len(items) != len(pairs):
+        raise ValueError("wrong number of paragraphs")
+    return [(it["casual"].strip(), {_wkey(k): v for k, v in it.get("words", {}).items()}) for it in items]
+
+
+# ---------- word swaps (Telugu word -> English word) ----------
+def _wkey(token: str) -> str:
+    """The word as the learner sees it, without punctuation: 'Vastunnaanu,' -> 'vastunnaanu'."""
+    return re.sub(r"[^\w-]", "", show(token)).lower()
+
+
+def _translate_te_en(script: str):
+    from deep_translator import GoogleTranslator
+    return GoogleTranslator(source="te", target="en").translate(script)
+
+
+@st.cache_data(show_spinner=False, max_entries=3000, ttl=60 * 60 * 24 * 30)
+def english_of_word(roman_word: str):
+    """Best guess at a Telugu word's English meaning (online)."""
+    script = te_script(roman_word)
+    try:
+        en = _translate_te_en(script)
+    except Exception:
+        try:
+            r = requests.get("https://api.mymemory.translated.net/get", params={"q": script, "langpair": "te|en"},
+                             timeout=6)
+            en = r.json()["responseData"]["translatedText"]
+        except Exception:
+            return ""
+    return "" if not en or TELUGU_RE.search(en) else en.strip().lower()
+
+
+def render_line(roman: str, swaps: dict):
+    """Apply word swaps. Returns (html for the card, plain text, spelling for the voice, swapped?)."""
+    html_out, plain, voice, start, changed = [], [], [], True, False
+    for tok in roman.split():
+        lead, core, trail = re.match(r"^([^\w]*)(.*?)([^\w]*)$", tok).groups()
+        key = _wkey(core)
+        if key and key in swaps and swaps[key].strip():
+            en = swaps[key].strip()
+            shown = en[:1].upper() + en[1:] if start else en
+            html_out.append(htmlesc(lead) + f'<span class="sw">{htmlesc(shown)}</span>' + htmlesc(trail))
+            plain.append(lead + shown + trail)
+            voice.append(lead + " ".join("_" + x for x in en.split()) + trail)
+            changed = True
+        else:
+            shown = show(core)
+            if start and shown:
+                shown = shown[:1].upper() + shown[1:]
+            html_out.append(htmlesc(lead + shown + trail))
+            plain.append(lead + shown + trail)
+            voice.append(tok)
+        start = bool(re.search(r"[.!?]$", tok))
+    return " ".join(html_out), " ".join(plain), " ".join(voice), changed
+
+
+def _set_swap(word, value):
+    st.session_state.setdefault("tr_swaps", {})[word] = value
+
+
+def _drop_swaps(words):
+    for w in words:
+        st.session_state.get("tr_swaps", {}).pop(w, None)
+
+
+TR_CSS = """<style>
+.trbox { background:#fff; border:1px solid var(--line); border-radius:16px; padding:12px 16px; margin:4px 0 2px; }
+.trbox.casual { border-left:5px solid var(--teal); } .trbox.formal { border-left:5px solid #3a3f96; }
+.trbox .lbl { font-size:.74rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:4px; }
+.trbox.casual .lbl { color:var(--teal); } .trbox.formal .lbl { color:#3a3f96; }
+.trbox .txt { color:var(--ink); font-size:1.1rem; font-weight:600; line-height:1.45; font-family:Poppins,sans-serif; }
+.trbox .sw { color:#b5530b; background:#fff1df; border-radius:6px; padding:0 4px; font-weight:600; }
+.trsrc { color:var(--muted); font-size:.92rem; margin:10px 0 2px; }
+</style>"""
+
+
+def tr_box(kind, label, roman, swaps, key, script=None):
+    html_line, _, voice, changed = render_line(roman, swaps)
+    c1, c2 = st.columns([5, 2])
+    c1.markdown(f'<div class="trbox {kind}"><div class="lbl">{label}</div><div class="txt">{html_line}</div></div>',
+                unsafe_allow_html=True)
+    with c2:
+        st.write("")
+        sc1, sc2 = st.columns(2)
+        exact = None if changed else script
+        sc1.button("🔊", key=f"tr_s_{key}", on_click=queue_say, args=(voice, False, exact), help="Say it",
+                   use_container_width=True)
+        sc2.button("🐢", key=f"tr_w_{key}", on_click=queue_say, args=(voice, True, exact), help="Slowly",
+                   use_container_width=True)
 
 
 with tab_tr:
+    st.markdown(TR_CSS, unsafe_allow_html=True)
     st.markdown("### ✍️ English → Telugu (in English letters)")
-    st.caption("Type or paste one or more paragraphs of English. You'll get the Telugu, written in English letters, "
-               "to read out loud. 🔊 reads each paragraph aloud.")
+    st.caption("Type or paste one or more paragraphs. You get two versions: **🗣️ Casual** — how people really talk in "
+               "Hyderabad, with English words mixed in — and **📘 Formal** — the written Telugu. "
+               "Then tap any word to switch it to English.")
     tr_in = st.text_area("Your English text", key="tr_in", height=180, max_chars=TR_MAX,
                          placeholder="e.g. I am going to the market this evening. Do you want anything? "
                                      "My mother is coming from Hyderabad tomorrow.")
-    b1, b2, _ = st.columns([1.4, 1, 2])
+    b1, b2, b3 = st.columns([1.4, 1, 2.2], vertical_alignment="center")
     go = b1.button("🔄 Translate", key="tr_go", type="primary", use_container_width=True)
     b2.button("✖ Clear", key="tr_clear", use_container_width=True,
-              on_click=lambda: st.session_state.update(tr_in="", tr_out=None))
+              on_click=lambda: st.session_state.update(tr_in="", tr_out=None, tr_swaps={}, tr_swap_pick=[]))
+    tr_view = b3.radio("Show", ["Both", "Casual", "Formal"], horizontal=True, key="tr_view",
+                       label_visibility="collapsed")
     if go:
         paras = [p.strip() for p in re.split(r"\n\s*\n|\n", tr_in or "") if p.strip()]
         if not paras:
@@ -2075,38 +2262,100 @@ with tab_tr:
                 for p in paras:
                     try:
                         te = translate_paragraph(p)
-                        results.append((p, te, readable_roman(te)))
+                        results.append({"en": p, "script": te, "formal": roman_of_script(te)})
                     except Exception:
-                        results.append((p, None, None))
-            st.session_state.tr_out = results
+                        results.append({"en": p, "script": None})
+                ok = [r for r in results if r["script"]]
+                ai_used = False
+                if ok and ai_key():
+                    try:
+                        for r, (cas, gloss) in zip(ok, casual_by_ai(tuple((r["en"], r["formal"]) for r in ok))):
+                            r["casual"], r["gloss"] = cas, gloss
+                        ai_used = True
+                    except Exception:
+                        st.session_state.tr_ai_err = True
+                for r in ok:
+                    if "casual" not in r:
+                        r["casual"], r["gloss"] = casual_by_rules(r["formal"]), {}
+            st.session_state.tr_out = {"items": results, "ai": ai_used}
+            st.session_state.tr_swaps, st.session_state.tr_swap_pick = {}, []
     out = st.session_state.get("tr_out")
+    if isinstance(out, list):            # result saved by the older version of this page
+        out = None
     if out:
-        if all(te is None for _, te, _ in out):
+        items = out["items"]
+        swaps = st.session_state.setdefault("tr_swaps", {})
+        if all(r["script"] is None for r in items):
             st.error("The online translator didn't answer just now — please try again in a minute.")
         else:
-            for i, (en, te, roman) in enumerate(out):
-                c1, c2 = st.columns([5, 2])
-                if te is None:
-                    c1.markdown(f'<div class="card"><div class="en">{htmlesc(en)}</div>'
-                                '<div class="note">⚠️ This paragraph didn\'t translate — try again.</div></div>',
-                                unsafe_allow_html=True)
+            # words that can be switched to English (worked out first, so a tap shows up straight away)
+            shown_versions = [r[k] for r in items if r["script"] for k in
+                              (("casual", "formal") if tr_view == "Both" else
+                               ("casual",) if tr_view == "Casual" else ("formal",))]
+            words, roman_of = [], {}
+            for line in shown_versions:
+                for tok in line.split():
+                    k = _wkey(tok)
+                    if len(k) > 1 and not tok.lstrip("“\"'(").startswith("_") and k not in roman_of:
+                        roman_of[k] = re.sub(r"[^\w]", "", tok)
+                        words.append(k)
+            picked = [w for w in (st.session_state.get("tr_swap_pick") or []) if w in roman_of]
+            gloss = {k: v for r in items if r["script"] for k, v in r.get("gloss", {}).items()}
+            _drop_swaps([w for w in list(swaps) if w not in picked])
+            for w in picked:
+                if w not in swaps:
+                    swaps[w] = gloss.get(w) or english_of_word(roman_of[w]) or w
+
+            casual_lbl = "🗣️ Casual · Hyderabad spoken" + (" ✨" if out["ai"] else "")
+            for i, r in enumerate(items):
+                st.markdown(f'<div class="trsrc">“{htmlesc(r["en"])}”</div>', unsafe_allow_html=True)
+                if not r["script"]:
+                    st.caption("⚠️ This paragraph didn't translate — try again.")
                     continue
-                c1.markdown(f'<div class="card"><div class="te" style="font-size:1.12rem;font-weight:600">'
-                            f'{htmlesc(roman)}</div><div class="en" style="margin-top:6px">{htmlesc(en)}</div></div>',
-                            unsafe_allow_html=True)
-                with c2:
-                    st.write("")
-                    sc1, sc2 = st.columns(2)
-                    sc1.button("🔊", key=f"tr_s_{i}", on_click=queue_say, args=(roman, False, te), help="Say it",
-                               use_container_width=True)
-                    sc2.button("🐢", key=f"tr_w_{i}", on_click=queue_say, args=(roman, True, te), help="Slowly",
-                               use_container_width=True)
-            with st.expander("📋 Copy the Telugu (English letters)"):
-                st.code("\n\n".join(r for _, te, r in out if te), language=None, wrap_lines=True)
-            st.markdown('<div class="tip">💡 This is a machine translation, so it is usually the <b>written / formal</b> '
-                        'Telugu. In Hyderabad people speak more simply and mix in English words '
-                        '(e.g. written <b>bhojanam</b> → spoken <b>tiffin / annam</b>). Use it to understand and read, '
-                        'and check 💬 Phrases for the everyday way to say things.</div>', unsafe_allow_html=True)
+                if tr_view in ("Both", "Casual"):
+                    tr_box("casual", casual_lbl, r["casual"], swaps, f"c{i}")
+                if tr_view in ("Both", "Formal"):
+                    tr_box("formal", "📘 Formal · written Telugu", r["formal"], swaps, f"f{i}", r["script"])
+
+            # ---------------- swap words to English ----------------
+            st.markdown("#### 🔁 Switch words to English")
+            st.caption("Tap a word below and it changes to English everywhere above (in both versions). "
+                       "You can edit the English, and tap the word again to switch it back.")
+            if any(w not in roman_of for w in (st.session_state.get("tr_swap_pick") or [])):
+                st.session_state.tr_swap_pick = picked      # a word no longer on screen (view changed)
+            st.pills("Words", words, selection_mode="multi", key="tr_swap_pick", label_visibility="collapsed")
+            for w in picked:
+                c1, c2 = st.columns([1, 2], vertical_alignment="center")
+                c1.markdown(f"**{htmlesc(w)}** →")
+                c2.text_input(f"English for {w}", value=swaps[w], key=f"tr_sw_{w}", label_visibility="collapsed",
+                              on_change=lambda w=w: _set_swap(w, st.session_state[f"tr_sw_{w}"]))
+            if picked:
+                st.button("↩️ Switch all back to Telugu", key="tr_unswap",
+                          on_click=lambda: st.session_state.update(tr_swaps={}, tr_swap_pick=[]))
+
+            with st.expander("📋 Copy the text (English letters)"):
+                txt = []
+                for r in items:
+                    if not r["script"]:
+                        continue
+                    if tr_view in ("Both", "Casual"):
+                        txt.append(("Casual: " if tr_view == "Both" else "") + render_line(r["casual"], swaps)[1])
+                    if tr_view in ("Both", "Formal"):
+                        txt.append(("Formal: " if tr_view == "Both" else "") + render_line(r["formal"], swaps)[1])
+                st.code("\n\n".join(txt), language=None, wrap_lines=True)
+
+            if out["ai"]:
+                st.caption("✨ The casual version was written by AI (Claude) in Hyderabad style. "
+                           "The formal version is from the online translator.")
+            else:
+                if st.session_state.pop("tr_ai_err", False):
+                    st.caption("⚠️ The AI casual version didn't answer, so the quick casual version is shown.")
+                st.markdown('<div class="tip">💡 The casual version here is made by quick rules from the formal one: it '
+                            'shortens the endings (<b>vastunnaanu → vastunna</b>, <b>nundi → nunchi</b>) and swaps '
+                            'bookish words for the English ones people use (<b>kaaryaalayam → office</b>). '
+                            'Good for short everyday sentences; for long or tricky ones it can still sound a bit formal'
+                            + (' — the app owner can switch on the ✨ AI version for a truly natural one.'
+                               if not ai_key() else '.') + '</div>', unsafe_allow_html=True)
 
 
 # ====================================== NUMBERS ======================================
