@@ -2,3 +2,5 @@ streamlit
 requests
 gTTS
 deep-translator
+python-docx
+reportlab

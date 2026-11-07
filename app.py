@@ -201,17 +201,18 @@ def install_audio_engine():
            f"s.textContent={json.dumps(AUDIO_ENGINE)};P.document.head.appendChild(s);}}}}catch(e){{}}</script>", 1)
 
 
-def queue_say(roman: str, slow=False):
-    """Button callback: remember what to say; it is played at the top of the next run."""
-    st.session_state.say_req = (roman, slow, random.random())
+def queue_say(roman: str, slow=False, script=None):
+    """Button callback: remember what to say; it is played at the top of the next run.
+    Pass `script` (Telugu letters) to speak it exactly, e.g. for online translations."""
+    st.session_state.say_req = (roman, slow, random.random(), script)
 
 
 def play_queued(holder):
     req = st.session_state.pop("say_req", None)
     if not req:
         return
-    roman, slow, nonce = req
-    script = te_script(roman)
+    roman, slow, nonce = req[:3]
+    script = (req[3] if len(req) > 3 else None) or te_script(roman)
     b64 = None
     if not st.session_state.get("tts_off"):
         try:
@@ -1286,9 +1287,10 @@ play_queued(audio_holder)
 if err := st.session_state.pop("save_error", None):
     st.warning(f"Progress couldn't be saved: {err}")
 
-(tab_home, tab_phr, tab_verbs, tab_allv, tab_prep, tab_dict, tab_num, tab_gram, tab_prac, tab_prog) = st.tabs(
-    ["🏠 Today", "💬 Phrases", "🔁 Verb tables", "📋 All verbs", "📍 Little words", "📖 Dictionary", "🔢 Numbers",
-     "🧠 Grammar", "🎯 Practice", "📈 Progress"])
+(tab_home, tab_phr, tab_verbs, tab_allv, tab_prep, tab_dict, tab_tr, tab_num, tab_gram, tab_prac,
+ tab_prog) = st.tabs(
+    ["🏠 Today", "💬 Phrases", "🔁 Verb tables", "📋 All verbs", "📍 Little words", "📖 Dictionary", "✍️ Translate",
+     "🔢 Numbers", "🧠 Grammar", "🎯 Practice", "📈 Progress"])
 
 
 # ======================================= TODAY =======================================
@@ -1487,6 +1489,345 @@ def all_verbs_html(verbs, show_full, tenses=ALLV_MAIN, extra_class=""):
     return f'<div class="allv-wrap"><table class="avt {extra_class}">{cols}{head}<tbody>{"".join(body)}</tbody></table></div>'
 
 
+# ============================ PRINT / WORD / PDF of the chosen verbs ============================
+REQ_HEADS = ["Please … (polite)", "Do it! (casual)", "Please don't …", "Don't … (casual)", "I must …",
+             "I can …", "I can't …", "Let's …"]
+REQ_KEYS = ["Polite request (please …)", "Casual command (to a friend)", "Please don't …", "Don't … (casual)",
+            "I must …", "I can …", "I can't …", "Let's …"]
+EXP_GROUPS = [("1st person", 2), ("2nd person", 2), ("3rd person", 4)]
+EXP_MAIN = [("present", "Present"), ("past", "Past"), ("future", "Future")]
+EXP_NEG = [("negative", "Won't / don't"), ("didnt", "Didn't")]
+
+
+def _short_en(e):
+    return e.replace(" (respectful / all of you)", " (resp.)").replace(" (respectful)", " (resp.)")
+
+
+def export_data(picks, show_full):
+    """Everything on the page for the chosen verbs, as plain text, ready for print / Word / PDF."""
+    verbs = [VERB_BY_EN[e] for e in picks]
+    persons = [(show(p[1]), _short_en(p[2])) for p in PERSONS]
+
+    def conj_rows(v, tenses, with_full):
+        rows = []
+        for tkey, tlabel in tenses:
+            cells = []
+            for p in PERSONS:
+                full, spoken = conj(v, tkey, p[0])
+                cells.append((show(spoken), show(full) if with_full and full != spoken else ""))
+            rows.append((tlabel, cells))
+        return rows
+
+    def label(v):
+        return f"to {v['en']}", show(dict_form(v))
+
+    qa = []
+    for v in verbs:
+        if v["en"] in VERB_QA:
+            q_te, q_en, a_te, a_en = VERB_QA[v["en"]]
+            qa.append((*label(v), show_cap(q_te), q_en, show_cap(a_te), a_en))
+    req = []
+    for v in verbs:
+        forms = dict(extra_forms(v))
+        req.append((*label(v), [show(forms[k]) if k in forms else "—" for k in REQ_KEYS]))
+    return {
+        "title": f"{APP_NAME} — my {len(verbs)} verb{'s' if len(verbs) != 1 else ''}",
+        "sub": f"{LEARNER} · {STYLE_NOTE} · {today_local().strftime('%d %b %Y')}",
+        "persons": persons,
+        "main": [(*label(v), conj_rows(v, EXP_MAIN, show_full)) for v in verbs],
+        "neg": [(*label(v), conj_rows(v, EXP_NEG, False)) for v in verbs],
+        "qa": qa,
+        "req": req,
+    }
+
+
+def export_html(d):
+    """A clean, printer-friendly page (A4 landscape)."""
+    e = htmlesc
+
+    def conj_table(blocks):
+        head = ('<tr><th rowspan="2" class="vb">Verb</th><th rowspan="2"></th>'
+                + "".join(f'<th colspan="{n}" class="grp g{i + 1}">{g}</th>' for i, (g, n) in enumerate(EXP_GROUPS))
+                + "</tr><tr>" + "".join(f"<th>{e(p)}<span>{e(en)}</span></th>" for p, en in d["persons"]) + "</tr>")
+        body = ""
+        for en, form, rows in blocks:
+            for ti, (tl, cells) in enumerate(rows):
+                vcell = f'<td class="vb" rowspan="{len(rows)}">{e(en)}<span>{e(form)}</span></td>' if ti == 0 else ""
+                tds = "".join(f"<td><b>{e(s)}</b>" + (f"<small>{e(f)}</small>" if f else "") + "</td>" for s, f in cells)
+                body += f'<tr class="{"first" if ti == 0 else ""}">{vcell}<td class="tn">{e(tl)}</td>{tds}</tr>'
+        return f"<table>{head}{body}</table>"
+
+    qa = "".join(f'<div class="qa"><div class="qv">{e(en)} · {e(form)}</div>'
+                 f'<div><b>Q:</b> {e(q)} <i>— {e(qe)}</i></div><div><b>A:</b> {e(a)} <i>— {e(ae)}</i></div></div>'
+                 for en, form, q, qe, a, ae in d["qa"])
+    req = ('<table><tr><th class="vb">Verb</th>' + "".join(f"<th>{e(h)}</th>" for h in REQ_HEADS) + "</tr>"
+           + "".join(f'<tr class="first"><td class="vb">{e(en)}<span>{e(form)}</span></td>'
+                     + "".join(f"<td><b>{e(x)}</b></td>" for x in forms) + "</tr>" for en, form, forms in d["req"])
+           + "</table>")
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{e(d['title'])}</title><style>
+@page {{ size: A4 landscape; margin: 10mm; }}
+* {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }}
+body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1d1d3f; margin: 0; padding: 12px; }}
+h1 {{ font-size: 20px; margin: 0; color: #23255e; }} .sub {{ color: #6c6a80; font-size: 11px; margin: 2px 0 10px; }}
+h2 {{ font-size: 15px; color: #23255e; margin: 16px 0 6px; border-bottom: 2px solid #e9a21a; padding-bottom: 2px; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 6px; }}
+th, td {{ border: 1px solid #d9cfb8; padding: 3px 3px; text-align: center; vertical-align: middle; }}
+th {{ background: #f7f2e6; }} th span, td span {{ display: block; font-weight: normal; color: #7a7890; font-size: 9px; }}
+th.grp {{ color: #fff; }} th.g1 {{ background: #23245e; }} th.g2 {{ background: #3a3f96; }} th.g3 {{ background: #0f7f7a; }}
+td.vb, th.vb {{ text-align: left; background: #fffaf0; font-weight: bold; width: 9%; }} td.vb span {{ color: #8a6d2f; }}
+td.tn {{ font-weight: bold; color: #6b6890; background: #fbf8f1; width: 7%; }}
+td small {{ display: block; color: #9a97ab; font-size: 8.5px; }}
+tr.first td {{ border-top: 2px solid #b9a77f; }} tr {{ page-break-inside: avoid; }}
+.qa {{ border: 1px solid #ece3cf; border-radius: 6px; padding: 5px 8px; margin: 4px 0; font-size: 11.5px; page-break-inside: avoid; }}
+.qa .qv {{ font-size: 10px; font-weight: bold; color: #8a6d2f; text-transform: uppercase; }} .qa i {{ color: #6c6a80; }}
+.note {{ color: #6c6a80; font-size: 10px; }}
+</style></head><body>
+<h1>{e(d['title'])}</h1><div class="sub">{e(d['sub'])} · bold = everyday spoken form, small grey = textbook form</div>
+<h2>1. Present · Past · Future</h2>{conj_table(d['main'])}
+<h2>2. Questions &amp; answers</h2>{qa or '<div class="note">No questions for these verbs.</div>'}
+<h2>3. Negatives: won't / don't · didn't</h2>{conj_table(d['neg'])}
+<div class="note">“Won't / don't” is for the future and for habits. “Didn't” is the same word for everyone.</div>
+<h2>4. Requests, must and can</h2>{req}
+<div class="note">Polite forms (…andi) are for elders, strangers and anyone you call 'meeru'. Casual forms are for friends.</div>
+</body></html>"""
+
+
+@st.cache_data(show_spinner=False, max_entries=50)
+def export_docx(picks, show_full):
+    from io import BytesIO
+    from docx import Document
+    from docx.enum.section import WD_ORIENT
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Mm, Pt, RGBColor
+
+    d = export_data(list(picks), show_full)
+    doc = Document()
+    sec = doc.sections[0]
+    sec.orientation = WD_ORIENT.LANDSCAPE
+    sec.page_width, sec.page_height = Mm(297), Mm(210)
+    for side in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
+        setattr(sec, side, Mm(10))
+    st_normal = doc.styles["Normal"]
+    st_normal.font.name, st_normal.font.size = "Calibri", Pt(9)
+    INK, GREY, GOLD = RGBColor(0x23, 0x25, 0x5E), RGBColor(0x8A, 0x87, 0x9C), RGBColor(0x8A, 0x6D, 0x2F)
+
+    def shade(cell, hexcol):
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear"); shd.set(qn("w:color"), "auto"); shd.set(qn("w:fill"), hexcol)
+        tcPr.append(shd)
+
+    def put(cell, main, small="", bold=True, color=None, size=9, align=1):
+        cell.text = ""
+        p = cell.paragraphs[0]
+        p.alignment = align
+        p.paragraph_format.space_after = Pt(0)
+        r = p.add_run(main); r.bold = bold; r.font.size = Pt(size)
+        if color: r.font.color.rgb = color
+        if small:
+            r2 = p.add_run("\n" + small); r2.font.size = Pt(size - 1.5); r2.font.color.rgb = GREY
+
+    def repeat_header(row):
+        trPr = row._tr.get_or_add_trPr()
+        for tag in ("w:tblHeader", "w:cantSplit"):
+            el = OxmlElement(tag); el.set(qn("w:val"), "true"); trPr.append(el)
+
+    def heading(text):
+        h = doc.add_heading(text, level=2)
+        for r in h.runs: r.font.color.rgb = INK
+
+    def conj_table(blocks):
+        n = len(d["persons"])
+        t = doc.add_table(rows=2, cols=2 + n)
+        t.style = "Table Grid"; t.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t.cell(0, 0).merge(t.cell(1, 0)); t.cell(0, 1).merge(t.cell(1, 1))
+        put(t.cell(0, 0), "Verb", align=0); shade(t.cell(0, 0), "F7F2E6"); shade(t.cell(0, 1), "F7F2E6")
+        col = 2
+        for (g, span), fill in zip(EXP_GROUPS, ("23245E", "3A3F96", "0F7F7A")):
+            c = t.cell(0, col).merge(t.cell(0, col + span - 1))
+            put(c, g, color=RGBColor(0xFF, 0xFF, 0xFF)); shade(c, fill)
+            col += span
+        for i, (p, en) in enumerate(d["persons"]):
+            put(t.cell(1, 2 + i), p, en, color=INK); shade(t.cell(1, 2 + i), "F7F2E6")
+        repeat_header(t.rows[0]); repeat_header(t.rows[1])
+        for en, form, rows in blocks:
+            start = len(t.rows)
+            for tl, cells in rows:
+                r = t.add_row().cells
+                put(r[1], tl, color=RGBColor(0x6B, 0x68, 0x90), size=8.5); shade(r[1], "FBF8F1")
+                for i, (s, f) in enumerate(cells):
+                    put(r[2 + i], s, f)
+            vc = t.cell(start, 0).merge(t.cell(len(t.rows) - 1, 0))
+            put(vc, en, form, color=INK, align=0); shade(vc, "FFFAF0")
+            for para in vc.paragraphs[1:]:
+                para._element.getparent().remove(para._element)
+        return t
+
+    title = doc.add_heading(d["title"], level=1)
+    for r in title.runs: r.font.color.rgb = INK
+    p = doc.add_paragraph(d["sub"] + " · bold = everyday spoken form, small grey = textbook form")
+    p.runs[0].font.color.rgb = GREY
+
+    heading("1. Present · Past · Future")
+    conj_table(d["main"])
+
+    heading("2. Questions & answers")
+    for en, form, q, qe, a, ae in d["qa"]:
+        p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(1)
+        r = p.add_run(f"{en.upper()} · {form}"); r.bold = True; r.font.color.rgb = GOLD; r.font.size = Pt(8.5)
+        for tag, te, eng in (("Q: ", q, qe), ("A: ", a, ae)):
+            p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(1); p.paragraph_format.left_indent = Mm(4)
+            p.add_run(tag).bold = True
+            r = p.add_run(te); r.bold = True; r.font.color.rgb = INK; r.font.size = Pt(10.5)
+            r = p.add_run("  — " + eng); r.italic = True; r.font.color.rgb = GREY
+    if not d["qa"]:
+        doc.add_paragraph("No questions for these verbs.")
+
+    heading("3. Negatives: won't / don't · didn't")
+    conj_table(d["neg"])
+    doc.add_paragraph("“Won't / don't” is for the future and for habits. “Didn't” is the same word for everyone."
+                      ).runs[0].font.color.rgb = GREY
+
+    heading("4. Requests, must and can")
+    t = doc.add_table(rows=1, cols=1 + len(REQ_HEADS))
+    t.style = "Table Grid"; t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    put(t.cell(0, 0), "Verb", align=0, color=INK); shade(t.cell(0, 0), "F7F2E6")
+    for i, h in enumerate(REQ_HEADS):
+        put(t.cell(0, i + 1), h, color=INK, size=8.5); shade(t.cell(0, i + 1), "F7F2E6")
+    repeat_header(t.rows[0])
+    for en, form, forms in d["req"]:
+        r = t.add_row().cells
+        put(r[0], en, form, color=INK, align=0); shade(r[0], "FFFAF0")
+        for i, x in enumerate(forms):
+            put(r[i + 1], x)
+    doc.add_paragraph("Polite forms (…andi) are for elders, strangers and anyone you call 'meeru'. "
+                      "Casual forms are for friends.").runs[0].font.color.rgb = GREY
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+@st.cache_data(show_spinner=False, max_entries=50)
+def export_pdf(picks, show_full):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    d = export_data(list(picks), show_full)
+    e = htmlesc
+    INK, CREAM, BAND, LINE = (colors.HexColor(x) for x in ("#23255e", "#f7f2e6", "#fffaf0", "#d9cfb8"))
+    base = ParagraphStyle("b", fontName="Helvetica", fontSize=8, leading=9.5, alignment=1, textColor=colors.HexColor("#1d1d3f"))
+    left = ParagraphStyle("l", parent=base, alignment=0)
+    h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=16, leading=19, textColor=INK)
+    h2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=INK, spaceBefore=8, spaceAfter=4)
+    note = ParagraphStyle("n", parent=left, fontSize=8, textColor=colors.HexColor("#6c6a80"))
+    qa_st = ParagraphStyle("qa", parent=left, fontSize=9.5, leading=12)
+
+    def cell(main, small="", bold=True, col="#1d1d3f", style=base):
+        txt = f'<font color="{col}">{"<b>" if bold else ""}{e(main)}{"</b>" if bold else ""}</font>'
+        if small:
+            txt += f'<br/><font size="6.8" color="#8a879c">{e(small)}</font>'
+        return Paragraph(txt, style)
+
+    page_w = landscape(A4)[0] - 20 * mm
+
+    def conj_table(blocks):
+        n = len(d["persons"])
+        vw, tw = page_w * 0.10, page_w * 0.075
+        widths = [vw, tw] + [(page_w - vw - tw) / n] * n
+        white = "#ffffff"
+        r0 = [cell("Verb", style=left), ""]
+        for g, span in EXP_GROUPS:
+            r0 += [cell(g, col=white)] + [""] * (span - 1)
+        r1 = ["", ""] + [cell(p, en, col="#23255e") for p, en in d["persons"]]
+        data, style = [r0, r1], [
+            ("GRID", (0, 0), (-1, -1), 0.4, LINE), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BACKGROUND", (0, 0), (-1, 1), CREAM), ("SPAN", (0, 0), (0, 1)), ("SPAN", (1, 0), (1, 1)),
+            ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2), ("RIGHTPADDING", (0, 0), (-1, -1), 2)]
+        c = 2
+        for (g, span), fill in zip(EXP_GROUPS, ("#23245e", "#3a3f96", "#0f7f7a")):
+            style += [("SPAN", (c, 0), (c + span - 1, 0)), ("BACKGROUND", (c, 0), (c + span - 1, 0), colors.HexColor(fill))]
+            c += span
+        for en, form, rows in blocks:
+            start = len(data)
+            for ti, (tl, cells) in enumerate(rows):
+                data.append([cell(en, form, col="#23255e", style=left) if ti == 0 else "",
+                             cell(tl, col="#6b6890")] + [cell(s, f) for s, f in cells])
+            end = len(data) - 1
+            style += [("SPAN", (0, start), (0, end)), ("BACKGROUND", (0, start), (1, end), BAND),
+                      ("LINEABOVE", (0, start), (-1, start), 1.2, colors.HexColor("#b9a77f"))]
+        return Table(data, colWidths=widths, repeatRows=2, style=TableStyle(style))
+
+    story = [Paragraph(e(d["title"]), h1),
+             Paragraph(e(d["sub"]) + " · bold = everyday spoken form, small grey = textbook form", note),
+             Paragraph("1. Present · Past · Future", h2), conj_table(d["main"]),
+             Paragraph("2. Questions &amp; answers", h2)]
+    for en, form, q, qe, a, ae in d["qa"]:
+        story.append(KeepTogether([
+            Paragraph(f'<font size="7.5" color="#8a6d2f"><b>{e(en.upper())} · {e(form)}</b></font>', left),
+            Paragraph(f'<b>Q:</b> <font color="#23255e"><b>{e(q)}</b></font> <font color="#8a879c"><i>— {e(qe)}</i></font>', qa_st),
+            Paragraph(f'<b>A:</b> <font color="#0f7f7a"><b>{e(a)}</b></font> <font color="#8a879c"><i>— {e(ae)}</i></font>', qa_st),
+            Spacer(1, 4)]))
+    if not d["qa"]:
+        story.append(Paragraph("No questions for these verbs.", note))
+    story += [Paragraph("3. Negatives: won't / don't · didn't", h2), conj_table(d["neg"]),
+              Paragraph("“Won't / don't” is for the future and for habits. “Didn't” is the same word for everyone.", note),
+              Paragraph("4. Requests, must and can", h2)]
+    vw = page_w * 0.12
+    rdata = [[cell("Verb", col="#23255e", style=left)] + [cell(h, col="#23255e") for h in REQ_HEADS]]
+    rdata += [[cell(en, form, col="#23255e", style=left)] + [cell(x) for x in forms] for en, form, forms in d["req"]]
+    story += [Table(rdata, colWidths=[vw] + [(page_w - vw) / len(REQ_HEADS)] * len(REQ_HEADS), repeatRows=1,
+                    style=TableStyle([("GRID", (0, 0), (-1, -1), 0.4, LINE), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                      ("BACKGROUND", (0, 0), (-1, 0), CREAM), ("BACKGROUND", (0, 1), (0, -1), BAND),
+                                      ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)])),
+              Paragraph("Polite forms (…andi) are for elders, strangers and anyone you call 'meeru'. "
+                        "Casual forms are for friends.", note)]
+
+    def footer(canvas, doc):
+        canvas.setFont("Helvetica", 7); canvas.setFillColor(colors.HexColor("#8a879c"))
+        canvas.drawRightString(landscape(A4)[0] - 10 * mm, 6 * mm, f"{APP_NAME} · page {doc.page}")
+
+    buf = BytesIO()
+    SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=10 * mm, rightMargin=10 * mm, topMargin=10 * mm,
+                      bottomMargin=12 * mm, title=d["title"], author=APP_NAME
+                      ).build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
+
+
+def print_button(html_doc, key):
+    """A real 'Print' button: prints only the verb sheet (not the whole app). Also offers it in a new tab."""
+    _embed(f"""
+<div style="display:flex;gap:8px;font-family:Inter,system-ui,sans-serif">
+ <button id="p" style="flex:1;padding:9px 6px;border-radius:12px;border:1px solid #d6cdb8;background:#23255e;color:#fff;
+  font-weight:600;font-size:14px;cursor:pointer">🖨️ Print</button>
+ <button id="o" style="flex:1;padding:9px 6px;border-radius:12px;border:1px solid #d6cdb8;background:#fff;color:#23255e;
+  font-weight:600;font-size:14px;cursor:pointer">↗ Open printable page</button>
+</div>
+<script>/*{key}*/
+const DOC = {json.dumps(html_doc)};
+document.getElementById('p').onclick = function () {{
+  let f = document.getElementById('pf'); if (f) f.remove();
+  f = document.createElement('iframe'); f.id = 'pf';
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  document.body.appendChild(f);
+  f.onload = function () {{ setTimeout(function () {{ try {{ f.contentWindow.focus(); f.contentWindow.print(); }}
+    catch (e) {{ document.getElementById('o').click(); }} }}, 250); }};
+  f.srcdoc = DOC;
+}};
+document.getElementById('o').onclick = function () {{
+  const url = URL.createObjectURL(new Blob([DOC], {{type: 'text/html'}}));
+  const w = window.open(url, '_blank');
+  if (!w) {{ const a = document.createElement('a'); a.href = url; a.download = 'pragna-verbs.html'; a.click(); }}
+}};
+</script>""", 48)
+
+
 with tab_allv:
     st.markdown(f"### 📋 All {len(VERBS)} verbs — full tables")
     st.markdown('<div class="allv-legend">Present · Past · Future for every person — no need to pick a verb. '
@@ -1511,6 +1852,28 @@ with tab_allv:
         if av_q:
             av_list = [x for x in av_list if av_q in x["en"].lower() or av_q in show(dict_form(x)).lower()]
         note = f"Showing {len(av_list)} of {len(VERBS)} verbs · A–Z by English"
+    if av_picks:
+        with st.container(border=True):
+            st.markdown("**🖨️ Print or save these verbs** — tables, questions & answers, negatives and requests "
+                        "(A4 landscape)")
+            picks_t = tuple(av_picks)
+            stamp = today.strftime("%Y-%m-%d")
+            ec1, ec2, ec3 = st.columns([2.2, 1, 1], vertical_alignment="center")
+            with ec1:
+                print_button(export_html(export_data(av_picks, av_full)), f"{picks_t}{av_full}")
+            try:
+                ec2.download_button("📄 Word", export_docx(picks_t, av_full), file_name=f"pragna-verbs-{stamp}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    key="allv_docx", use_container_width=True)
+            except Exception as ex:
+                ec2.caption(f"Word export unavailable ({type(ex).__name__})")
+            try:
+                ec3.download_button("📕 PDF", export_pdf(picks_t, av_full), file_name=f"pragna-verbs-{stamp}.pdf",
+                                    mime="application/pdf", key="allv_pdf", use_container_width=True)
+            except Exception as ex:
+                ec3.caption(f"PDF export unavailable ({type(ex).__name__})")
+            st.caption("Tip: on a phone, the 📕 PDF is the easiest way to print. "
+                       "The “Show textbook forms too” switch above also applies to the printout.")
     if not av_list:
         st.info("No verb matches that search.")
     else:
@@ -1643,6 +2006,107 @@ with tab_dict:
             entry(en, te, note, f"topic_{topic}_{i}")
     st.caption(f"Built in: {sum(len(x) for x in WORDS.values())} words · {sum(len(x) for x in PHRASES.values())} phrases · "
                f"{len(VERBS)} verbs with full tables · numbers 1–100 · plus the online dictionary.")
+
+
+# ===================================== TRANSLATE =====================================
+TR_MAX = 4500          # characters per translation (the free online translator's limit is ~5000)
+_TE_DIGITS = str.maketrans("౦౧౨౩౪౫౬౭౮౯", "0123456789")
+
+
+def _split_chunks(text, limit):
+    """Split a paragraph into pieces under `limit` characters, at sentence ends where possible."""
+    out, cur = [], ""
+    for s in re.split(r"(?<=[.!?])\s+", text):
+        while len(s) > limit:                      # one enormous sentence: cut at a space
+            cut = s.rfind(" ", 0, limit) if s.rfind(" ", 0, limit) > 0 else limit
+            out.append(s[:cut]); s = s[cut:].lstrip()
+        if cur and len(cur) + len(s) + 1 > limit:
+            out.append(cur); cur = s
+        else:
+            cur = f"{cur} {s}".strip()
+    return out + ([cur] if cur else [])
+
+
+@st.cache_data(show_spinner=False, max_entries=500, ttl=60 * 60 * 24 * 7)
+def translate_paragraph(text: str):
+    """English paragraph -> Telugu script. Google first, then MyMemory (small pieces)."""
+    import concurrent.futures as cf
+    for fn, limit in ((_translate_google, 4500), (_translate_mymemory, 450)):
+        try:
+            parts = []
+            for chunk in _split_chunks(text, limit):
+                with cf.ThreadPoolExecutor(max_workers=1) as ex:
+                    te = ex.submit(fn, chunk).result(timeout=15)
+                if not te or not TELUGU_RE.search(te):
+                    raise ValueError("no Telugu came back")
+                parts.append(te.strip())
+            return " ".join(parts)
+        except Exception:
+            continue
+    raise ConnectionError("translator not reachable")
+
+
+def readable_roman(te_text: str) -> str:
+    """Telugu script -> easy English letters, with capitals at the start of each sentence."""
+    clean = re.sub("[\u200b-\u200d\ufeff]", "", te_text.translate(_TE_DIGITS))
+    s = show(roman_from_telugu(clean))
+    s = s.replace("।", ".").replace("॥", ".")
+    return re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), s)
+
+
+with tab_tr:
+    st.markdown("### ✍️ English → Telugu (in English letters)")
+    st.caption("Type or paste one or more paragraphs of English. You'll get the Telugu, written in English letters, "
+               "to read out loud. 🔊 reads each paragraph aloud.")
+    tr_in = st.text_area("Your English text", key="tr_in", height=180, max_chars=TR_MAX,
+                         placeholder="e.g. I am going to the market this evening. Do you want anything? "
+                                     "My mother is coming from Hyderabad tomorrow.")
+    b1, b2, _ = st.columns([1.4, 1, 2])
+    go = b1.button("🔄 Translate", key="tr_go", type="primary", use_container_width=True)
+    b2.button("✖ Clear", key="tr_clear", use_container_width=True,
+              on_click=lambda: st.session_state.update(tr_in="", tr_out=None))
+    if go:
+        paras = [p.strip() for p in re.split(r"\n\s*\n|\n", tr_in or "") if p.strip()]
+        if not paras:
+            st.warning("Type some English first.")
+        else:
+            results = []
+            with st.spinner("Translating…"):
+                for p in paras:
+                    try:
+                        te = translate_paragraph(p)
+                        results.append((p, te, readable_roman(te)))
+                    except Exception:
+                        results.append((p, None, None))
+            st.session_state.tr_out = results
+    out = st.session_state.get("tr_out")
+    if out:
+        if all(te is None for _, te, _ in out):
+            st.error("The online translator didn't answer just now — please try again in a minute.")
+        else:
+            for i, (en, te, roman) in enumerate(out):
+                c1, c2 = st.columns([5, 2])
+                if te is None:
+                    c1.markdown(f'<div class="card"><div class="en">{htmlesc(en)}</div>'
+                                '<div class="note">⚠️ This paragraph didn\'t translate — try again.</div></div>',
+                                unsafe_allow_html=True)
+                    continue
+                c1.markdown(f'<div class="card"><div class="te" style="font-size:1.12rem;font-weight:600">'
+                            f'{htmlesc(roman)}</div><div class="en" style="margin-top:6px">{htmlesc(en)}</div></div>',
+                            unsafe_allow_html=True)
+                with c2:
+                    st.write("")
+                    sc1, sc2 = st.columns(2)
+                    sc1.button("🔊", key=f"tr_s_{i}", on_click=queue_say, args=(roman, False, te), help="Say it",
+                               use_container_width=True)
+                    sc2.button("🐢", key=f"tr_w_{i}", on_click=queue_say, args=(roman, True, te), help="Slowly",
+                               use_container_width=True)
+            with st.expander("📋 Copy the Telugu (English letters)"):
+                st.code("\n\n".join(r for _, te, r in out if te), language=None, wrap_lines=True)
+            st.markdown('<div class="tip">💡 This is a machine translation, so it is usually the <b>written / formal</b> '
+                        'Telugu. In Hyderabad people speak more simply and mix in English words '
+                        '(e.g. written <b>bhojanam</b> → spoken <b>tiffin / annam</b>). Use it to understand and read, '
+                        'and check 💬 Phrases for the everyday way to say things.</div>', unsafe_allow_html=True)
 
 
 # ====================================== NUMBERS ======================================
